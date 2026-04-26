@@ -1,0 +1,140 @@
+### Banking Transactions API — Sample Requests
+### Compatible with VS Code REST Client and JetBrains HTTP Client
+
+@base = http://localhost:3000
+
+# ─────────────────────────────────────────────────────────────
+# Task 1: Core CRUD
+# ─────────────────────────────────────────────────────────────
+
+### Create a deposit
+POST {{base}}/transactions
+Content-Type: application/json
+
+{
+  "toAccount": "ACC-12345",
+  "amount": 1000.00,
+  "currency": "USD",
+  "type": "deposit"
+}
+
+###
+
+### Create a transfer
+POST {{base}}/transactions
+Content-Type: application/json
+
+{
+  "fromAccount": "ACC-12345",
+  "toAccount": "ACC-67890",
+  "amount": 250.00,
+  "currency": "USD",
+  "type": "transfer"
+}
+
+###
+
+### Create a withdrawal
+POST {{base}}/transactions
+Content-Type: application/json
+
+{
+  "fromAccount": "ACC-12345",
+  "amount": 75.50,
+  "currency": "USD",
+  "type": "withdrawal"
+}
+
+###
+
+### List all transactions
+GET {{base}}/transactions
+
+###
+
+### Get a single transaction (replace <id> with a real ID)
+# GET {{base}}/transactions/<id>
+
+# ─────────────────────────────────────────────────────────────
+# Task 2: Validation errors
+# ─────────────────────────────────────────────────────────────
+
+### Invalid: negative amount
+POST {{base}}/transactions
+Content-Type: application/json
+
+{
+  "toAccount": "ACC-12345",
+  "amount": -10,
+  "currency": "USD",
+  "type": "deposit"
+}
+
+###
+
+### Invalid: bad currency
+POST {{base}}/transactions
+Content-Type: application/json
+
+{
+  "toAccount": "ACC-12345",
+  "amount": 100,
+  "currency": "XYZ",
+  "type": "deposit"
+}
+
+###
+
+### Invalid: bad account format
+POST {{base}}/transactions
+Content-Type: application/json
+
+{
+  "toAccount": "12345",
+  "amount": 100,
+  "currency": "USD",
+  "type": "deposit"
+}
+
+# ─────────────────────────────────────────────────────────────
+# Task 3: Filters
+# ─────────────────────────────────────────────────────────────
+
+###
+
+### Filter by account
+GET {{base}}/transactions?accountId=ACC-12345
+
+###
+
+### Filter by type
+GET {{base}}/transactions?type=deposit
+
+###
+
+### Filter by date range
+GET {{base}}/transactions?from=2024-01-01&to=2024-12-31
+
+###
+
+### Combined filters
+GET {{base}}/transactions?accountId=ACC-12345&type=transfer
+
+###
+
+### Account balance
+GET {{base}}/accounts/ACC-12345/balance
+
+# ─────────────────────────────────────────────────────────────
+# Task 4: CSV Export
+# ─────────────────────────────────────────────────────────────
+
+###
+
+### Export all as CSV
+GET {{base}}/transactions/export?format=csv
+
+###
+
+### Export filtered by account
+GET {{base}}/transactions/export?format=csv&accountId=ACC-12345
