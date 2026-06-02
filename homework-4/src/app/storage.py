@@ -9,10 +9,15 @@ def read_holocron(name: str) -> str:
 
 
 def write_holocron(name: str, body: str) -> None:
-    path = BASE_DIR / name
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(body)           # BUG #2: silently overwrites existing holocron
+    resolved = (BASE_DIR / name).resolve()
+    if not resolved.is_relative_to(BASE_DIR.resolve()):
+        raise ValueError("Path escapes vault")
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    resolved.write_text(body)           # BUG #2: silently overwrites existing holocron
 
 
 def holocron_exists(name: str) -> bool:
-    return (BASE_DIR / name).exists()
+    resolved = (BASE_DIR / name).resolve()
+    if not resolved.is_relative_to(BASE_DIR.resolve()):
+        raise ValueError("Path escapes vault")
+    return resolved.exists()
