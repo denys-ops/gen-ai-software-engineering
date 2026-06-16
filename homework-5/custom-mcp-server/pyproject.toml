@@ -1,0 +1,12 @@
+[project]
+name = "lorem-ipsum-mcp-server"
+version = "0.1.0"
+description = "Custom FastMCP server for Homework 5 — serves word-limited lorem ipsum via a resource and a `read` tool"
+readme = "../README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastmcp>=2.0",
+]
+
+[tool.uv]
+package = false
