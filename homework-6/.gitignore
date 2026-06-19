@@ -1,0 +1,10 @@
+# Generated pipeline runtime artifacts
+shared/
+
+# Python / uv
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
