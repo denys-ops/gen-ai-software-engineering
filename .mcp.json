@@ -1,0 +1,32 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/Users/almin/PycharmProjects/gen-ai-software-engineering"
+      ]
+    },
+    "jira": {
+      "type": "sse",
+      "url": "https://mcp.atlassian.com/v1/sse"
+    },
+    "lorem-ipsum": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "/Users/almin/PycharmProjects/gen-ai-software-engineering/homework-5/custom-mcp-server",
+        "server.py"
+      ]
+    },
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer ${GITHUB_PAT}"
+      }
+    }
+  }
+}
