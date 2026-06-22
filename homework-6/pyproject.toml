@@ -1,0 +1,27 @@
+[project]
+name = "homework-6-banking-pipeline"
+version = "0.1.0"
+description = "Multi-agent banking transaction pipeline (HW6 capstone) by Denys Kondratiuk"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "fastmcp>=3.0,<4",
+]
+
+[dependency-groups]
+# Pinned to the mature, well-tested line for reproducibility. pytest 9.x + pytest-cov 7.x are
+# bleeding-edge and have shown startup instability (segfaults) on some platforms; pin to 8.x/6.x.
+dev = [
+    "pytest>=8.3,<9",
+    "pytest-cov>=6.0,<7",
+    "coverage>=7.6,<8",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+# Be explicit and resilient: never let an auto-loaded third-party plugin change collection behavior.
+addopts = "-p no:cacheprovider"
+
+[tool.coverage.run]
+source = ["agents", "config", "integrator", "mcp"]
+omit = ["tests/*"]
