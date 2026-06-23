@@ -18,11 +18,27 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from agents import compliance_checker, fraud_detector, transaction_validator
+import config
+from agents import (
+    compliance_checker,
+    fraud_detector,
+    notification_agent,
+    transaction_validator,
+)
 from agents._shared import audit, build_envelope, utc_now_iso
 
 STAGE_DIRS = ("input", "processing", "output", "results")
 SOURCE_AGENT = "integrator"
+
+# Maps a configurable stage name (config.DEFAULT_STAGES) to its agent module. The validator is not
+# here — it is the always-on entry gate handled explicitly in _run_one. We store the module (not the
+# bound function) so process_message is resolved at call time — late binding keeps the stage loop in
+# step with monkeypatching and any runtime reassignment of an agent's process_message.
+STAGE_MODULES = {
+    "fraud_detector": fraud_detector,
+    "compliance_checker": compliance_checker,
+    "notification_agent": notification_agent,
+}
 
 
 def _setup_dirs(base: Path, reset: bool) -> dict[str, Path]:
@@ -47,9 +63,18 @@ def _move(message: dict[str, Any], txn_id: str, src: Path, dst: Path) -> None:
 
 
 def _run_one(
-    record: dict[str, Any], dirs: dict[str, Path], audit_log: Path
+    record: dict[str, Any],
+    dirs: dict[str, Path],
+    audit_log: Path,
+    stages: tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
-    """Run a single transaction through the full pipeline and return the terminal message."""
+    """Run a single transaction through the validator gate + enabled stages.
+
+    ``stages`` selects which downstream stages run (default: ``config.ENABLED_STAGES``); the
+    transaction_validator always runs first. Each stage moves the message through the
+    output -> processing -> output lifecycle; the terminal message lands in results/.
+    """
+    active = config.ENABLED_STAGES if stages is None else stages
     txn_id = record.get("transaction_id", "UNKNOWN")
 
     # input -> processing
@@ -59,7 +84,7 @@ def _run_one(
     _write(dirs["input"] / f"{txn_id}.json", message)
     _move(message, txn_id, dirs["input"], dirs["processing"])
 
-    # validation stage
+    # validation stage (always on)
     message = transaction_validator.process_message(message, audit_log)
     _move(message, txn_id, dirs["processing"], dirs["output"])
 
@@ -67,15 +92,15 @@ def _run_one(
         _move(message, txn_id, dirs["output"], dirs["results"])
         return message
 
-    # fraud stage
-    _move(message, txn_id, dirs["output"], dirs["processing"])
-    message = fraud_detector.process_message(message, audit_log)
-    _move(message, txn_id, dirs["processing"], dirs["output"])
+    # configurable downstream stages, in order
+    for stage in active:
+        module = STAGE_MODULES[stage]
+        _move(message, txn_id, dirs["output"], dirs["processing"])
+        message = module.process_message(message, audit_log)
+        _move(message, txn_id, dirs["processing"], dirs["output"])
 
-    # compliance stage -> results
-    _move(message, txn_id, dirs["output"], dirs["processing"])
-    message = compliance_checker.process_message(message, audit_log)
-    _move(message, txn_id, dirs["processing"], dirs["results"])
+    # terminal: output -> results
+    _move(message, txn_id, dirs["output"], dirs["results"])
     return message
 
 
@@ -87,6 +112,7 @@ def _summarise(messages: list[dict[str, Any]]) -> dict[str, Any]:
         "flagged": 0,
         "approved": 0,
         "held": 0,
+        "notified": 0,
         "errors": 0,
     }
     transactions = []
@@ -106,6 +132,9 @@ def _summarise(messages: list[dict[str, Any]]) -> dict[str, Any]:
             counts["approved"] += 1
         elif decision == "hold":
             counts["held"] += 1
+        notifications = data.get("notifications") or []
+        if notifications:
+            counts["notified"] += 1
         transactions.append(
             {
                 "transaction_id": data.get("transaction_id"),
@@ -115,6 +144,7 @@ def _summarise(messages: list[dict[str, Any]]) -> dict[str, Any]:
                 "flagged": data.get("flagged"),
                 "decision": decision,
                 "decision_reason": data.get("decision_reason"),
+                "notifications": notifications,
             }
         )
     return {"generated_at": utc_now_iso(), "counts": counts, "transactions": transactions}
@@ -195,6 +225,43 @@ def run_pipeline(
 
     summary = _summarise(terminal_messages)
     _write(dirs["results"] / "summary.json", summary)
+    return summary
+
+
+def process_one(
+    record: dict[str, Any],
+    base_dir: str = "shared",
+    stages: object = None,
+) -> dict[str, Any]:
+    """Process a single transaction inline (the REST gateway's entry point).
+
+    Uses append semantics (``reset=False``) so submissions accumulate in shared/results/. ``stages``
+    is validated via ``config.resolve_stages`` (None -> ``config.ENABLED_STAGES``). Returns the
+    terminal transaction ``data`` dict (status/risk_score/decision/notifications/...).
+    """
+    active = config.ENABLED_STAGES if stages is None else config.resolve_stages(stages)
+    base = Path(base_dir)
+    dirs = _setup_dirs(base, reset=False)
+    audit_log = dirs["results"] / "audit.log"
+    message = _run_one(record, dirs, audit_log, active)
+    return message["data"]
+
+
+def rebuild_summary(base_dir: str = "shared") -> dict[str, Any]:
+    """Recompute shared/results/summary.json from every result envelope on disk and return it."""
+    results_dir = Path(base_dir) / "results"
+    messages: list[dict[str, Any]] = []
+    if results_dir.exists():
+        for path in sorted(results_dir.glob("*.json")):
+            if path.name == "summary.json":
+                continue
+            try:
+                messages.append(json.loads(path.read_text(encoding="utf-8")))
+            except (json.JSONDecodeError, OSError):
+                continue  # skip an unreadable/partial file rather than failing the whole summary
+    summary = _summarise(messages)
+    results_dir.mkdir(parents=True, exist_ok=True)
+    _write(results_dir / "summary.json", summary)
     return summary
 
 

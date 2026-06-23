@@ -48,5 +48,5 @@ class TestProcessMessage:
         msg = make_message(target="compliance_checker")
         msg["data"].update({"risk_score": 0, "triggered_rules": [], "flagged": False})
         out = c.process_message(msg)
-        assert out["target_agent"] == "results"
+        assert out["target_agent"] == "notification_agent"
         assert out["data"]["decision"] == "approve"

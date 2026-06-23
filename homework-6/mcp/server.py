@@ -32,6 +32,7 @@ _PUBLIC_FIELDS = (
     "flagged",
     "decision",
     "decision_reason",
+    "notifications",
 )
 
 
