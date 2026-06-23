@@ -92,8 +92,97 @@ Then ask Claude, e.g., "use get_transaction_status for TXN002" and "look up Fast
 
 ---
 
-## 8. One-command demo
+## 8. One-command demo (CLI pipeline)
 ```bash
 bash demo/run.sh
 ```
 Runs the validator dry-run, the full pipeline, and prints the results summary + a sample MCP query.
+
+---
+
+## 9. REST API gateway
+
+Start the API (single-worker is mandatory — do **not** pass `--workers > 1`):
+
+```bash
+cd homework-6
+uv sync
+uv run uvicorn api.main:app --port 8000
+```
+
+Then open **`http://localhost:8000/docs`** for the interactive Swagger UI.
+
+### Example curl calls
+
+```bash
+# Liveness probe
+curl http://localhost:8000/health
+
+# Submit the sample batch
+curl -s -X POST http://localhost:8000/transactions \
+  -H 'Content-Type: application/json' \
+  --data @sample-transactions.json | python3 -m json.tool
+
+# Retrieve a single result (flagged + held, carries notifications)
+curl http://localhost:8000/transactions/TXN002 | python3 -m json.tool
+
+# Aggregate counts (includes 'notified' field)
+curl http://localhost:8000/summary | python3 -m json.tool
+
+# Active notification rules
+curl http://localhost:8000/rules | python3 -m json.tool
+
+# Active pipeline config and thresholds
+curl http://localhost:8000/config | python3 -m json.tool
+
+# Per-request stage override — run fraud_detector only
+curl -s -X POST "http://localhost:8000/transactions?stages=fraud_detector" \
+  -H 'Content-Type: application/json' \
+  --data @sample-transactions.json | python3 -m json.tool
+```
+
+---
+
+## 10. One-command API demo
+
+Starts the API automatically, submits all transactions, prints results, and tears down the server:
+
+```bash
+./demo.sh            # uses port 8000 by default
+PORT=8001 ./demo.sh  # override the port if 8000 is busy
+```
+
+---
+
+## 11. Flexible pipeline — toggling stages
+
+The `transaction_validator` is always-on. The three downstream stages are optional:
+
+```bash
+# Run only fraud detection (skip compliance + notifications):
+ENABLED_STAGES="fraud_detector" uv run python integrator.py
+
+# Run fraud + compliance (skip notifications):
+ENABLED_STAGES="fraud_detector,compliance_checker" uv run python integrator.py
+
+# Full pipeline (default — all three stages):
+uv run python integrator.py
+```
+
+Per-request override via the REST API: append `?stages=fraud_detector` (or any CSV combination)
+to `POST /transactions`. Unknown stage names return HTTP 400.
+
+---
+
+## 12. Configurable notification rules
+
+Edit `rules.json` to change which channels are notified and under what conditions — no Python
+edits required. Supported operators: `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `contains`,
+`exists`. Dotted field paths (e.g. `metadata.country`) are resolved against the transaction data.
+
+To use a completely different rules file:
+```bash
+RULES_PATH=/path/to/other-rules.json uv run python integrator.py
+# or, for the API:
+RULES_PATH=/path/to/other-rules.json uv run uvicorn api.main:app --port 8000
+```

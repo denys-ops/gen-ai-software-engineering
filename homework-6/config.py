@@ -22,6 +22,10 @@ ACCOUNT_PATTERN: str = r"^ACC-\d{4}$"
 # Transaction types that are allowed to carry a negative amount (e.g. a reversal).
 NEGATIVE_ALLOWED_TYPES: frozenset[str] = frozenset({"refund"})
 
+# Path to the configurable notification rule set (rule engine). Relative paths resolve against the
+# homework-6 root in agents/rule_engine.py; env wins so the rules file can be swapped without edits.
+RULES_PATH: str = os.environ.get("RULES_PATH", "rules.json")
+
 
 def _get_decimal(name: str, default: str) -> Decimal:
     raw = os.environ.get(name, default)
@@ -72,3 +76,33 @@ SANCTIONED_COUNTRIES: frozenset[str] = frozenset(
 
 # Transaction types subject to extra compliance scrutiny.
 HIGH_SCRUTINY_TYPES: frozenset[str] = frozenset({"wire_transfer"})
+
+# --- Flexible pipeline: enable/disable stages -----------------------------------------
+
+# Ordered registry of optional stages run after the always-on transaction_validator gate.
+DEFAULT_STAGES: tuple[str, ...] = ("fraud_detector", "compliance_checker", "notification_agent")
+
+
+def resolve_stages(names: object = None) -> tuple[str, ...]:
+    """Validate and canonically order a stage selection.
+
+    ``names`` may be None (defaults to ENABLED_STAGES at runtime — here, DEFAULT_STAGES), a
+    comma-separated string, or an iterable of names. Blanks are dropped; unknown names raise
+    ValueError (callers turn this into a clear startup error or an HTTP 400). The validator is
+    never included — it is the always-on entry gate. The result preserves DEFAULT_STAGES order.
+    """
+    raw: object = DEFAULT_STAGES if names is None else names
+    parts = raw.split(",") if isinstance(raw, str) else list(raw)
+    requested = [str(s).strip() for s in parts if str(s).strip()]
+    unknown = [s for s in requested if s not in DEFAULT_STAGES]
+    if unknown:
+        raise ValueError(
+            f"unknown pipeline stage(s): {unknown}; valid: {list(DEFAULT_STAGES)}"
+        )
+    return tuple(s for s in DEFAULT_STAGES if s in requested)
+
+
+# Env-overridable default selection. A bad ENABLED_STAGES value surfaces as a clear startup error.
+ENABLED_STAGES: tuple[str, ...] = resolve_stages(
+    _get_str("ENABLED_STAGES", ",".join(DEFAULT_STAGES))
+)

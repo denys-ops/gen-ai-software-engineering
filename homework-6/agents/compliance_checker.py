@@ -44,4 +44,6 @@ def process_message(
 
     audit(audit_log, agent=AGENT_NAME, transaction_id=txn_id, outcome=f"{decision}:{reason}")
 
-    return reroute(message, source_agent=AGENT_NAME, target_agent="results", data=transaction)
+    return reroute(
+        message, source_agent=AGENT_NAME, target_agent="notification_agent", data=transaction
+    )

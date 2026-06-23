@@ -1,0 +1,53 @@
+{
+  "rules": [
+    {
+      "id": "sanctioned-hold",
+      "match": "all",
+      "when": [
+        { "field": "decision_reason", "op": "eq", "value": "sanctioned_country" }
+      ],
+      "action": {
+        "channel": "compliance_team",
+        "priority": "critical",
+        "message": "Sanctioned-country transaction held for review"
+      }
+    },
+    {
+      "id": "high-fraud",
+      "match": "all",
+      "when": [
+        { "field": "flagged", "op": "eq", "value": true }
+      ],
+      "action": {
+        "channel": "fraud_ops",
+        "priority": "high",
+        "message": "High fraud risk flagged"
+      }
+    },
+    {
+      "id": "held-review",
+      "match": "all",
+      "when": [
+        { "field": "decision", "op": "eq", "value": "hold" }
+      ],
+      "action": {
+        "channel": "ops_queue",
+        "priority": "medium",
+        "message": "Transaction on hold for manual review"
+      }
+    },
+    {
+      "id": "large-approved",
+      "match": "all",
+      "when": [
+        { "field": "decision", "op": "eq", "value": "approve" },
+        { "field": "amount", "op": "gt", "value": 10000 }
+      ],
+      "action": {
+        "channel": "audit_log",
+        "priority": "low",
+        "message": "Large approved transaction recorded"
+      }
+    }
+  ]
+}
